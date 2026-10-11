@@ -1,0 +1,26 @@
+{
+  "name": "live-reminder-platform",
+  "version": "1.2.1",
+  "description": "A self-hosted live-status monitoring and WeChat reminder starter kit.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "demo": "npm run build && node server/demo-server.cjs",
+    "start": "npm run build && node --env-file-if-exists=.env server/start.cjs",
+    "admin:secrets": "node tools/generate-admin-secrets.cjs"
+  },
+  "dependencies": {
+    "@tabler/icons-react": "^3.44.0",
+    "@vitejs/plugin-react": "5.0.4",
+    "playwright-core": "1.62.1",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "vite": "6.4.3"
+  },
+  "license": "AGPL-3.0-only"
+}

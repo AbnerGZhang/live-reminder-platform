@@ -1,0 +1,67 @@
+.settings-card {
+  margin-top: 0;
+}
+
+.account-card,
+.compact-state,
+.privacy-card {
+  margin-top: 22rpx;
+}
+
+.language-row {
+  gap: 20rpx;
+  border-top: 1rpx solid #ececf0;
+}
+
+.language-control {
+  display: flex;
+  padding: 5rpx;
+  background: #ececf1;
+  border-radius: 24rpx;
+}
+
+.language-option {
+  min-width: 88rpx;
+  min-height: 88rpx;
+  margin: 0;
+  padding: 0 18rpx;
+  color: #5e5e65;
+  background: transparent;
+  border-radius: 20rpx;
+  font-size: 24rpx;
+  font-weight: 680;
+  line-height: 88rpx;
+}
+
+.language-option.selected {
+  color: #1d1d1f;
+  background: #ffffff;
+  box-shadow: 0 3rpx 10rpx rgba(0, 0, 0, 0.1);
+}
+
+.compact-state {
+  padding-top: 42rpx;
+  padding-bottom: 42rpx;
+}
+
+.account-card .row:first-of-type,
+.privacy-card .row:first-of-type {
+  border-top: 1rpx solid #ececf0;
+}
+
+.connection-dot {
+  width: 18rpx;
+  height: 18rpx;
+  flex: none;
+  background: #34c759;
+  border-radius: 50%;
+}
+
+.secondary-button,
+.danger-button {
+  box-shadow: 0 8rpx 24rpx rgba(35, 42, 54, 0.045);
+}
+
+.account-delete-button {
+  margin-top: 18rpx;
+}

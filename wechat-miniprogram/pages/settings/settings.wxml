@@ -1,0 +1,150 @@
+﻿<view class="page-shell" aria-live="polite" aria-busy="{{viewState === 'loading' || savingReminders || deletingAccount}}">
+  <view class="card settings-card">
+    <view class="card-header">
+      <view class="card-heading">
+        <view class="card-title">{{t.preferencesSection}}</view>
+      </view>
+      <view class="count-pill">{{viewState === 'ready' ? 2 : 1}}</view>
+    </view>
+
+    <view class="row language-row">
+      <view class="icon-well" aria-hidden="true">
+        <icon type="info" size="20" color="#0066cc" />
+      </view>
+      <view class="row-main">
+        <view class="row-title">{{t.language}}</view>
+      </view>
+      <view class="language-control" aria-role="radiogroup" aria-label="{{t.language}}">
+        <button
+          class="language-option {{locale === 'en' ? 'selected' : ''}}"
+          data-locale="en"
+          bindtap="onSelectLanguage"
+          aria-role="radio"
+          aria-label="English"
+          aria-checked="{{locale === 'en'}}"
+        >EN</button>
+        <button
+          class="language-option {{locale === 'zhCN' ? 'selected' : ''}}"
+          data-locale="zhCN"
+          bindtap="onSelectLanguage"
+          aria-role="radio"
+          aria-label="涓枃"
+          aria-checked="{{locale === 'zhCN'}}"
+        >中文</button>
+      </view>
+    </view>
+
+    <view class="row" wx:if="{{viewState === 'ready'}}">
+      <view class="icon-well" aria-hidden="true">
+        <icon type="waiting" size="20" color="#0066cc" />
+      </view>
+      <view class="row-main">
+        <view class="row-title">{{savingReminders ? t.saving : t.remindersTitle}}</view>
+        <view class="row-subtitle">{{remindersEnabled ? t.remindersOn : t.remindersOff}}</view>
+      </view>
+      <switch
+        color="#34c759"
+        checked="{{remindersEnabled}}"
+        disabled="{{demoMode || savingReminders || deletingAccount}}"
+        bindchange="onReminderToggle"
+        aria-label="{{t.remindersTitle}}"
+      />
+    </view>
+  </view>
+
+  <view class="card state-card compact-state" wx:if="{{viewState === 'loading'}}">
+    <view class="spinner" aria-hidden="true"></view>
+    <view class="state-title">{{t.loading}}</view>
+  </view>
+
+  <view class="card account-card" wx:elif="{{viewState === 'ready'}}">
+    <view class="card-header">
+      <view class="card-heading">
+        <view class="card-title">{{t.accountSection}}</view>
+      </view>
+      <view class="count-pill">2</view>
+    </view>
+    <view class="row">
+      <view class="icon-well success" aria-hidden="true">
+        <icon type="success" size="20" color="#16783b" />
+      </view>
+      <view class="row-main">
+        <view class="row-title">{{t.signedIn}}</view>
+        <view class="row-subtitle">{{t.lastRefresh}} 路 {{refreshedAt}}</view>
+      </view>
+      <view class="connection-dot" aria-hidden="true"></view>
+    </view>
+    <view class="row">
+      <view class="icon-well neutral" aria-hidden="true">
+        <icon type="info" size="20" color="#647184" />
+      </view>
+      <view class="row-main">
+        <view class="row-title">{{t.apiEndpoint}}</view>
+        <view class="row-subtitle">{{apiConfigured ? t.configured : t.notConfigured}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card state-card compact-state" wx:else>
+    <view class="state-icon-well" aria-hidden="true">
+      <icon type="warn" size="28" color="#0066cc" />
+    </view>
+    <view class="state-title">{{errorTitle || t.unauthorizedTitle}}</view>
+    <view class="state-body">{{errorMessage || t.unauthorizedBody}}</view>
+    <button class="inline-button" bindtap="onRetry">{{viewState === 'unauthorized' ? t.reauthenticate : t.retry}}</button>
+  </view>
+
+  <view class="card privacy-card">
+    <view class="card-header">
+      <view class="card-heading">
+        <view class="card-title">{{t.securitySection}}</view>
+      </view>
+      <view class="count-pill">4</view>
+    </view>
+    <view class="row">
+      <view class="icon-well" aria-hidden="true">
+        <icon type="info" size="20" color="#0066cc" />
+      </view>
+      <view class="row-main">
+        <view class="row-title">{{t.permissionTitle}}</view>
+        <view class="row-subtitle">{{t.permissionBody}}</view>
+      </view>
+    </view>
+    <view class="row">
+      <view class="icon-well warning" aria-hidden="true">
+        <icon type="warn" size="20" color="#9b6300" />
+      </view>
+      <view class="row-main">
+        <view class="row-title">{{t.handsetUnknown}}</view>
+        <view class="row-subtitle">{{t.acceptedNotDisplayed}}</view>
+      </view>
+    </view>
+    <view class="row">
+      <view class="icon-well success" aria-hidden="true">
+        <icon type="success" size="20" color="#16783b" />
+      </view>
+      <view class="row-main">
+        <view class="row-title">{{t.signedIn}}</view>
+        <view class="row-subtitle">{{t.tokenStorageNote}}</view>
+      </view>
+    </view>
+    <view class="row">
+      <view class="icon-well neutral" aria-hidden="true">
+        <icon type="waiting" size="20" color="#647184" />
+      </view>
+      <view class="row-main">
+        <view class="row-title">{{t.currentState}}</view>
+        <view class="row-subtitle">{{t.serverDetectionNote}}</view>
+      </view>
+    </view>
+  </view>
+
+  <button class="secondary-button" wx:if="{{viewState === 'ready' && !demoMode}}" disabled="{{deletingAccount}}" bindtap="onSignOut">{{t.signOut}}</button>
+  <button
+    class="danger-button account-delete-button"
+    wx:if="{{viewState === 'ready' && !demoMode}}"
+    disabled="{{deletingAccount}}"
+    bindtap="onDeleteAccount"
+  >{{deletingAccount ? t.saving : t.deleteAccount}}</button>
+</view>
+
