@@ -1,4 +1,4 @@
-# Live Reminder Platform / 直播提醒平台
+# Live Reminder Platform / 直播提醒平台ZHANG
 
 A starter kit for one operator to run live-status monitoring and WeChat reminders for their users.
 
