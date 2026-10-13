@@ -1,4 +1,4 @@
-﻿<view class="page-shell" aria-live="polite" aria-busy="{{viewState === 'loading'}}">
+<view class="page-shell" aria-live="polite" aria-busy="{{viewState === 'loading'}}">
   <view class="card state-card" wx:if="{{viewState === 'loading'}}">
     <view class="spinner" aria-hidden="true"></view>
     <view class="state-title">{{t.loading}}</view>
@@ -39,17 +39,17 @@
               <view class="target-name">{{item.displayName}}</view>
               <view class="status-pill {{item.displayState}}">{{item.statusText}}</view>
             </view>
-            <view class="target-meta">{{t.sourceLabel}} 路 {{item.sourceLabel}}</view>
-            <view class="target-meta">{{t.updatedAt}} 路 {{item.updatedAtLabel}}</view>
+            <view class="target-meta">{{t.sourceLabel}} · {{item.sourceLabel}}</view>
+            <view class="target-meta">{{t.updatedAt}} · {{item.updatedAtLabel}}</view>
             <view class="target-choice">{{item.saving ? t.subscriptionSaving : (item.subscribed ? t.subscribed : t.notSubscribed)}}</view>
           </view>
           <switch
             color="#34c759"
             checked="{{item.subscribed}}"
-            disabled="{{demoMode || item.saving}}"
+            disabled="{{item.saving}}"
             data-channel-id="{{item.id}}"
             bindchange="onSubscriptionToggle"
-            aria-label="{{item.displayName}} 路 {{item.subscribed ? t.subscribed : t.notSubscribed}}"
+            aria-label="{{item.displayName}} · {{item.subscribed ? t.subscribed : t.notSubscribed}}"
           />
         </view>
       </block>
@@ -57,4 +57,3 @@
 
   </block>
 </view>
-

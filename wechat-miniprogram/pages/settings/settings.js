@@ -1,6 +1,6 @@
-﻿const api = require('../../services/api');
+const api = require('../../services/api');
 const { fetchClientData } = require('../../services/client-data');
-const { isConfigured, isDemoMode } = require('../../services/config');
+const { isConfigured } = require('../../services/config');
 const { messageKeyForError } = require('../../services/errors');
 const session = require('../../services/session');
 const { clearPendingGrant } = require('../../services/grant-recovery');
@@ -35,12 +35,10 @@ Page({
     savingReminders: false,
     deletingAccount: false,
     apiConfigured: false,
-    demoMode: false,
     refreshedAt: '',
   },
 
   onShow() {
-    this.setData({ demoMode: isDemoMode() });
     applyPageLocale(this, 'settingsTab');
     this.refresh();
   },
@@ -94,7 +92,7 @@ Page({
   },
 
   async onReminderToggle(event) {
-    if (this.data.demoMode || this.data.savingReminders || this.data.deletingAccount || this.data.viewState !== 'ready') return;
+    if (this.data.savingReminders || this.data.deletingAccount || this.data.viewState !== 'ready') return;
     const enabled = Boolean(event.detail.value);
     const previous = this.data.remindersEnabled;
     this.setData({ remindersEnabled: enabled, savingReminders: true });
@@ -114,7 +112,7 @@ Page({
   },
 
   async onSignOut() {
-    if (this.data.demoMode || this.data.deletingAccount) return;
+    if (this.data.deletingAccount) return;
     const confirmed = await confirmModal(
       this.data.t.signOutConfirmTitle,
       this.data.t.signOutConfirmBody,
@@ -135,7 +133,7 @@ Page({
   },
 
   async onDeleteAccount() {
-    if (this.data.demoMode || this.data.deletingAccount) return;
+    if (this.data.deletingAccount) return;
     const confirmed = await confirmModal(
       this.data.t.deleteAccountConfirmTitle,
       this.data.t.deleteAccountConfirmBody,
@@ -158,4 +156,3 @@ Page({
     }
   },
 });
-

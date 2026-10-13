@@ -1,4 +1,4 @@
-﻿const api = require('../../services/api');
+const api = require('../../services/api');
 const { fetchClientData } = require('../../services/client-data');
 const { messageKeyForError, ClientError } = require('../../services/errors');
 const {
@@ -7,7 +7,6 @@ const {
   savePendingGrant,
 } = require('../../services/grant-recovery');
 const { applyPageLocale } = require('../../utils/i18n');
-const { isDemoMode } = require('../../services/config');
 
 function requestNotificationPermission(templateId) {
   return new Promise((resolve, reject) => {
@@ -27,7 +26,6 @@ function readIntentId(payload) {
 Page({
   data: {
     locale: 'en',
-    demoMode: false,
     t: {},
     viewState: 'loading',
     errorTitle: '',
@@ -41,12 +39,8 @@ Page({
   },
 
   onShow() {
-    const demoMode = isDemoMode();
-    this.setData({ demoMode });
     applyPageLocale(this, 'monitorTab');
-    this.refresh().then(() => {
-      if (!demoMode) return this.reconcilePendingGrant({ silent: true });
-    });
+    this.refresh().then(() => this.reconcilePendingGrant({ silent: true }));
   },
 
   onPullDownRefresh() {
@@ -86,7 +80,7 @@ Page({
   },
 
   async onReminderToggle(event) {
-    if (this.data.demoMode || this.data.savingReminders) return;
+    if (this.data.savingReminders) return;
     const enabled = Boolean(event.detail.value);
     const previous = this.data.remindersEnabled;
     this.setData({ remindersEnabled: enabled, savingReminders: true });
@@ -106,7 +100,7 @@ Page({
   },
 
   async onAddReminder() {
-    if (this.data.demoMode || this.data.grantState === 'saving') return;
+    if (this.data.grantState === 'saving') return;
     if (loadPendingGrant()) {
       await this.reconcilePendingGrant({ silent: false });
       return;
@@ -192,5 +186,3 @@ Page({
     }
   },
 });
-
-

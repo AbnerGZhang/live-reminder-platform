@@ -1,13 +1,11 @@
-﻿const api = require('../../services/api');
+const api = require('../../services/api');
 const { fetchClientData } = require('../../services/client-data');
 const { messageKeyForError } = require('../../services/errors');
 const { applyPageLocale } = require('../../utils/i18n');
-const { isDemoMode } = require('../../services/config');
 
 Page({
   data: {
     locale: 'en',
-    demoMode: false,
     t: {},
     viewState: 'loading',
     errorTitle: '',
@@ -16,7 +14,6 @@ Page({
   },
 
   onShow() {
-    this.setData({ demoMode: isDemoMode() });
     applyPageLocale(this, 'targetsTab');
     this.refresh();
   },
@@ -54,7 +51,6 @@ Page({
   },
 
   async onSubscriptionToggle(event) {
-    if (this.data.demoMode) return;
     const channelId = String(event.currentTarget.dataset.channelId || '');
     const index = this.data.channels.findIndex((channel) => channel.id === channelId);
     if (index < 0 || this.data.channels[index].saving) return;
@@ -81,4 +77,3 @@ Page({
     }
   },
 });
-

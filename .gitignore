@@ -39,13 +39,3 @@ releases/
 *.bak
 .DS_Store
 Thumbs.db
-
-# Local test and backup configuration
-config/self-hosted-live-test.json
-wechat-miniprogram-backup-before-demo/project.private.config.json
-wechat-miniprogram-backup-before-demo/config.local.js
-
-
-# Exclude old demo backup
-wechat-miniprogram-backup-before-demo/
-

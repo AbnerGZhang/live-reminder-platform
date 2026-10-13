@@ -1,13 +1,9 @@
-﻿let localConfig = null;
+let localConfig = null;
 
 try {
   localConfig = require('../config.local.js');
 } catch (error) {
   localConfig = null;
-}
-
-function isDemoMode() {
-  return Boolean(localConfig && localConfig.demoMode === true);
 }
 
 function configurationError(message) {
@@ -52,5 +48,4 @@ function isConfigured() {
 module.exports = {
   getConfig,
   isConfigured,
-  isDemoMode,
 };

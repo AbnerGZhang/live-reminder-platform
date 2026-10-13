@@ -1,18 +1,8 @@
-﻿const { getConfig } = require('./config');
+const { getConfig } = require('./config');
 const { ClientError, normalizeRequestError } = require('./errors');
 const { clearSessionToken, getSessionToken } = require('./session');
 
-let localConfig = null;
-try {
-  localConfig = require('../config.local.js');
-} catch (error) {
-  localConfig = null;
-}
-
 function request({ path, method, data }) {
-  if (localConfig && localConfig.demoMode === true) {
-    return Promise.reject(new ClientError('DEMO_READ_ONLY', 'API actions are disabled in local demo mode'));
-  }
   const config = getConfig();
   const token = getSessionToken();
   if (!token) return Promise.reject(new ClientError('UNAUTHORIZED', 'A session is required', 401));
@@ -160,4 +150,3 @@ module.exports = {
   setReminders,
   setSubscription,
 };
-

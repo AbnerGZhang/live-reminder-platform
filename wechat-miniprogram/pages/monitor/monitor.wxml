@@ -1,4 +1,4 @@
-﻿<view class="page-shell" aria-live="polite" aria-busy="{{viewState === 'loading' || savingReminders || grantState === 'saving'}}">
+<view class="page-shell" aria-live="polite" aria-busy="{{viewState === 'loading' || savingReminders || grantState === 'saving'}}">
   <view class="card state-card" wx:if="{{viewState === 'loading'}}">
     <view class="spinner" aria-hidden="true"></view>
     <view class="state-title">{{t.loading}}</view>
@@ -46,8 +46,8 @@
               <view class="channel-name">{{item.displayName}}</view>
               <view class="status-pill {{item.displayState}}">{{item.statusText}}</view>
             </view>
-            <view class="channel-meta">{{t.sourceLabel}} 路 {{item.sourceLabel}}</view>
-            <view class="channel-meta">{{t.updatedAt}} 路 {{item.updatedAtLabel}}</view>
+            <view class="channel-meta">{{t.sourceLabel}} · {{item.sourceLabel}}</view>
+            <view class="channel-meta">{{t.updatedAt}} · {{item.updatedAtLabel}}</view>
             <view class="channel-hint">{{item.statusHint}}</view>
           </view>
         </view>
@@ -74,7 +74,7 @@
         <switch
           color="#34c759"
           checked="{{remindersEnabled}}"
-          disabled="{{demoMode || savingReminders}}"
+          disabled="{{savingReminders}}"
           bindchange="onReminderToggle"
           aria-label="{{t.remindersTitle}}"
         />
@@ -86,7 +86,7 @@
         </view>
         <button
           class="add-button"
-          disabled="{{demoMode || grantState === 'saving'}}"
+          disabled="{{grantState === 'saving'}}"
           bindtap="onAddReminder"
         >{{grantState === 'saving' ? t.grantInProgress : (grantState === 'pending-sync' ? t.retryGrantSync : t.addReminder)}}</button>
       </view>
@@ -100,4 +100,3 @@
     </view>
   </block>
 </view>
-
