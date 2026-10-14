@@ -27,7 +27,7 @@ const DEFAULT_DATA_DIRECTORY = '.data';
 const DEFAULT_CONFIG_FILE = 'config/self-hosted.json';
 const DEFAULT_WORKER_INTERVAL_MS = 1_000;
 const MAX_TIMER_MS = 2_147_483_647;
-const CLIENT_TEMPLATE_SOURCES = new Set(['broadcasterId', 'eventId', 'occurredAt', 'source']);
+const CLIENT_TEMPLATE_SOURCES = new Set(['broadcasterId', 'broadcasterName', 'eventId', 'occurredAt', 'source']);
 const SERVER_SECRET_NAMES = Object.freeze([
   'ADMIN_PASSWORD_HASH',
   'ADMIN_SESSION_SECRET',
@@ -59,12 +59,10 @@ async function createSelfHostedRuntime({
     preparedEnvironment.ADMIN_COOKIE_SECURE = '0';
   }
   const serverPreflightConfig = preflightServerEnvironment(preparedEnvironment);
-  const config = runtimeConfig
-    ? normalizeRuntimeConfig(runtimeConfig)
-    : loadRuntimeConfig(path.resolve(
-      workingDirectory,
-      environment.SELF_HOSTED_CONFIG || DEFAULT_CONFIG_FILE,
-    ));
+  const configFilename = path.resolve(resolvedWorkingDirectory, environment.SELF_HOSTED_CONFIG || DEFAULT_CONFIG_FILE);
+  const config = runtimeConfig === undefined
+    ? loadRuntimeConfig(configFilename)
+    : normalizeRuntimeConfig(runtimeConfig);
   const workerIntervalMs = boundedInteger(
     Number(environment.SELF_HOSTED_WORKER_INTERVAL_MS || DEFAULT_WORKER_INTERVAL_MS),
     1,
@@ -93,7 +91,7 @@ async function createSelfHostedRuntime({
       bearerToken: requireEnvironmentSecret(environment, definition.bearerTokenEnvironment),
     });
   });
-  const browserOptions = sourceDefinitions.some(definition => definition.kind === 'douyin-page')
+  const browserOptions = config.browser
     ? resolveBrowserOptions(config.browser, environment)
     : undefined;
   const statusSourceRuntime = createStatusSourceRuntime({
@@ -102,6 +100,7 @@ async function createSelfHostedRuntime({
     createBrowserDriver,
     fetch: fetchImpl,
     now: () => currentDate(now),
+    enableDynamicDouyinPageSources: !readOnly && Boolean(config.browser),
   });
   const preparedSources = statusSourceRuntime.registrations;
   await assertPortAvailable(serverPreflightConfig.host, serverPreflightConfig.port);
@@ -130,6 +129,7 @@ async function createSelfHostedRuntime({
         clientStore,
         clientEnvironment,
         clientConfig: config.client,
+        channels: config.channels,
         clock: now,
       });
     const store = createSqliteStore({ filename: databaseFile, readOnly });
@@ -157,6 +157,7 @@ async function createSelfHostedRuntime({
   let secrets;
   let serverConfig;
   let schedulers;
+  let publicChannels = null;
   let server;
   try {
     if (!readOnly) await bootstrapRecipients(core, config.recipients);
@@ -171,7 +172,7 @@ async function createSelfHostedRuntime({
         fetchImpl,
         timeoutMs: clientEnvironment.timeoutMs,
       });
-      const publicChannels = config.channels
+      publicChannels = config.channels
         .filter(channel => channel.enabled)
         .map(channel => ({
           channelId: channel.id,
@@ -193,24 +194,50 @@ async function createSelfHostedRuntime({
       });
       clientRequestHandler = createClientRequestHandler({ portal });
     }
-    schedulers = preparedSources.map(({ definition, source }) => {
-      return createPollScheduler({
-        broadcasterId: definition.broadcasterId,
-        statusSource: source,
-        pollIntervalMs: definition.pollIntervalMs,
-        confirmationIntervalMs: definition.confirmationIntervalMs,
-        now: () => currentDate(now),
-        onObservation: handleScheduledObservation,
-        onError: (error) => {
-          process.stderr.write(`status source ${definition.id} failed: ${safeMessage(error)}\n`);
-        },
-      });
+    const buildScheduler = ({ definition, source }) => createPollScheduler({
+      broadcasterId: definition.broadcasterId,
+      statusSource: source,
+      pollIntervalMs: definition.pollIntervalMs,
+      confirmationIntervalMs: definition.confirmationIntervalMs,
+      now: () => currentDate(now),
+      onObservation: handleScheduledObservation,
+      onError: (error) => {
+        process.stderr.write('status source ' + definition.id + ' failed: ' + safeMessage(error) + '\n');
+      },
+    });
+    schedulers = new Map();
+    for (const registration of preparedSources) {
+      const channel = config.channels.find(item => item.id === registration.definition.broadcasterId);
+      if (channel && channel.enabled === false) continue;
+      schedulers.set(registration.definition.id, buildScheduler(registration));
+    }
+    const monitorManager = readOnly ? null : createMonitorManager({
+      config,
+      configFilename,
+      statusSourceRuntime,
+      schedulers,
+      createScheduler: buildScheduler,
+      normalizeConfig: normalizeRuntimeConfig,
+      isStarted: () => started,
+      syncPublicChannels: () => {
+        if (!Array.isArray(publicChannels)) return;
+        const nextChannels = config.channels.filter(channel => channel.enabled).map(channel => ({
+          channelId: channel.id,
+          broadcasterId: channel.id,
+          name: channel.displayName,
+          sourceLabel: channel.platform,
+          description: channel.description,
+          staleAfterMs: channel.staleAfterMs,
+        }));
+        publicChannels.splice(0, publicChannels.length, ...nextChannels);
+      },
     });
     server = createSelfHostedServer({
       staticDir,
       core,
       config: serverConfig,
       clientRequestHandler,
+      monitorManager,
     });
   } catch (error) {
     await statusSourceRuntime.close().catch(() => {});
@@ -244,14 +271,14 @@ async function createSelfHostedRuntime({
         workerOnce().catch((error) => process.stderr.write(`delivery worker failed: ${safeMessage(error)}\n`));
       }, workerIntervalMs);
       workerHandle?.unref?.();
-      for (const scheduler of schedulers) scheduler.start();
+      for (const scheduler of schedulers.values()) scheduler.start();
       workerOnce().catch((error) => process.stderr.write(`delivery worker failed: ${safeMessage(error)}\n`));
     }
     return server.address();
   }
 
   async function stop() {
-    await Promise.all(schedulers.map(scheduler => scheduler.stop().catch(() => {})));
+    await Promise.all([...schedulers.values()].map(scheduler => scheduler.stop().catch(() => {})));
     if (workerHandle !== undefined) {
       clearIntervalFn(workerHandle);
       workerHandle = undefined;
@@ -289,6 +316,7 @@ function createDelivery({
   clientStore,
   clientEnvironment,
   clientConfig,
+  channels = [],
   clock,
 }) {
   const mode = String(environment.DELIVERY_MODE || 'local-inbox').trim().toLowerCase();
@@ -308,6 +336,10 @@ function createDelivery({
         provider: 'wechat-mini-program',
         recipientId,
       }),
+      resolveBroadcasterName: broadcasterId => {
+        const channel = channels.find(item => item.id === broadcasterId);
+        return channel ? channel.displayName : broadcasterId;
+      },
       fetchImpl,
       timeoutMs: clientEnvironment.timeoutMs,
       clock,
@@ -369,6 +401,290 @@ function createScheduledObservationHandler({ core, workerOnce, onWorkerError = (
       .catch(onWorkerError);
     return result;
   };
+}
+
+function createMonitorManager({
+  config,
+  configFilename,
+  statusSourceRuntime,
+  schedulers,
+  createScheduler,
+  normalizeConfig,
+  isStarted = () => false,
+  syncPublicChannels = () => {},
+}) {
+  let mutationQueue = Promise.resolve();
+
+  function serialized(operation) {
+    const result = mutationQueue.then(operation, operation);
+    mutationQueue = result.catch(() => {});
+    return result;
+  }
+
+  function fail(code, message, statusCode = 400) {
+    const error = new Error(message);
+    error.code = code;
+    error.statusCode = statusCode;
+    throw error;
+  }
+
+  function ensureObject(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) fail('INVALID_BODY', 'Request body must be a JSON object.');
+    return value;
+  }
+
+  function parseName(value) {
+    const name = typeof value === 'string' ? value.trim() : '';
+    if (!name || name.length > 100) fail('INVALID_NAME', 'Account name must contain 1 to 100 characters.');
+    return name;
+  }
+
+  function parseDescription(value) {
+    const description = value === undefined ? '' : (typeof value === 'string' ? value.trim() : null);
+    if (description === null || description.length > 300) fail('INVALID_DESCRIPTION', 'Description must be 300 characters or fewer.');
+    return description;
+  }
+
+  function parseEnabled(value, fallback) {
+    if (value === undefined) return fallback;
+    if (typeof value !== 'boolean') fail('INVALID_ENABLED', 'Enabled must be true or false.');
+    return value;
+  }
+
+  function parseIntervalMinutes(value, fallback) {
+    if (value === undefined) return fallback;
+    const minutes = Number(value);
+    if (!Number.isSafeInteger(minutes) || minutes < 1 || minutes > 60) {
+      fail('INVALID_INTERVAL', 'Polling interval must be a whole number from 1 to 60 minutes.');
+    }
+    return minutes;
+  }
+
+  function parseDouyinUrl(value) {
+    if (typeof value !== 'string' || value.trim().length === 0 || value.length > 2048) {
+      fail('INVALID_DOUYIN_URL', 'Enter a valid Douyin profile URL.');
+    }
+    let parsed;
+    try { parsed = new URL(value.trim()); } catch { fail('INVALID_DOUYIN_URL', 'Enter a valid Douyin profile URL.'); }
+    if (parsed.protocol !== 'https:' || parsed.hostname !== 'www.douyin.com' || parsed.username || parsed.password) {
+      fail('INVALID_DOUYIN_URL', 'Use a https://www.douyin.com/user/... profile link.');
+    }
+    const match = parsed.pathname.match(/^\/user\/([^/]+)\/?$/);
+    if (!match) fail('INVALID_DOUYIN_URL', 'Use a https://www.douyin.com/user/... profile link.');
+    let identity = match[1];
+    try { identity = decodeURIComponent(identity); } catch { /* validation below rejects malformed IDs */ }
+    if (!/^[A-Za-z0-9._~-]{1,256}$/.test(identity)) fail('INVALID_DOUYIN_URL', 'The Douyin profile ID contains unsupported characters.');
+    return { expectedIdentity: identity, url: 'https://www.douyin.com/user/' + identity };
+  }
+
+  function uniqueId(prefix, values) {
+    const existing = new Set(values);
+    let id;
+    do { id = prefix + require('node:crypto').randomBytes(8).toString('hex'); } while (existing.has(id));
+    return id;
+  }
+
+  function withSafeBrowserIntervals(sources) {
+    const pageSources = sources.filter(source => source.kind === 'douyin-page');
+    if (pageSources.length === 0) return sources;
+    const minimumSpacingMs = config.browser && config.browser.minimumReadSpacingMs || 12_000;
+    const possibleReads = pageSources.length * 2;
+    const worstCaseMs = pageSources.reduce((total, source) => total + source.timeoutMs * 2, 0)
+      + minimumSpacingMs * Math.max(0, possibleReads - 1)
+      + Math.max(...pageSources.map(source => source.confirmationIntervalMs));
+    const safeMinimumMs = Math.ceil(worstCaseMs / 60_000) * 60_000;
+    return sources.map(source => source.kind === 'douyin-page'
+      ? { ...source, pollIntervalMs: Math.max(Number(source.pollIntervalMs || 300_000), safeMinimumMs) }
+      : source);
+  }
+
+  function normalizeCandidate(sources, channels) {
+    const draft = JSON.parse(JSON.stringify(config));
+    draft.statusSources = withSafeBrowserIntervals(sources);
+    draft.channels = channels;
+    if (draft.browser === null || draft.browser === undefined) delete draft.browser;
+    if (draft.client && draft.client.template === null) delete draft.client.template;
+    return normalizeConfig(draft);
+  }
+
+  function persist(candidate) {
+    const diskConfig = JSON.parse(JSON.stringify(candidate));
+    if (diskConfig.browser === null || diskConfig.browser === undefined) delete diskConfig.browser;
+    if (diskConfig.client && diskConfig.client.template === null) delete diskConfig.client.template;
+    const temporaryFile = configFilename + '.tmp-' + process.pid + '-' + Date.now();
+    fs.mkdirSync(path.dirname(configFilename), { recursive: true });
+    fs.writeFileSync(temporaryFile, JSON.stringify(diskConfig, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
+    try {
+      fs.renameSync(temporaryFile, configFilename);
+    } catch (error) {
+      try { fs.unlinkSync(temporaryFile); } catch { /* best effort cleanup */ }
+      throw error;
+    }
+  }
+
+  function targetList() {
+    return config.statusSources.filter(source => source.kind === 'douyin-page').map(source => {
+      const channel = config.channels.find(item => item.id === source.broadcasterId);
+      return {
+        channelId: source.broadcasterId,
+        sourceId: source.id,
+        displayName: channel ? channel.displayName : source.broadcasterId,
+        platform: channel ? channel.platform : 'Douyin',
+        description: channel ? channel.description : '',
+        enabled: channel ? channel.enabled !== false : true,
+        sort: channel ? channel.sort : 0,
+        url: source.url,
+        expectedIdentity: source.expectedIdentity,
+        pollIntervalMs: source.pollIntervalMs,
+        pollIntervalMinutes: Math.round(source.pollIntervalMs / 60_000),
+      };
+    }).sort((left, right) => left.sort - right.sort || left.displayName.localeCompare(right.displayName));
+  }
+
+  function sourceTargetChanged(before, after) {
+    if (!before || !after) return true;
+    return before.kind !== after.kind || before.broadcasterId !== after.broadcasterId
+      || before.url !== after.url || before.expectedIdentity !== after.expectedIdentity || before.timeoutMs !== after.timeoutMs;
+  }
+
+  async function applyCandidate(candidate) {
+    const beforeTargets = config.statusSources.filter(source => source.kind === 'douyin-page');
+    const afterTargets = candidate.statusSources.filter(source => source.kind === 'douyin-page');
+    const beforeById = new Map(beforeTargets.map(source => [source.id, source]));
+    const afterById = new Map(afterTargets.map(source => [source.id, source]));
+    const oldChannels = new Map(config.channels.map(channel => [channel.id, channel]));
+    const nextChannels = new Map(candidate.channels.map(channel => [channel.id, channel]));
+
+    // Validate and persist before changing live registrations. The candidate was fully normalized already.
+    persist(candidate);
+
+    for (const before of beforeTargets) {
+      const after = afterById.get(before.id);
+      const oldChannel = oldChannels.get(before.broadcasterId);
+      const nextChannel = nextChannels.get(before.broadcasterId);
+      const replaced = sourceTargetChanged(before, after);
+      const disabled = !nextChannel || nextChannel.enabled === false;
+      if (replaced || disabled) {
+        const scheduler = schedulers.get(before.id);
+        if (scheduler) {
+          await scheduler.stop().catch(() => {});
+          if (replaced) schedulers.delete(before.id);
+        }
+      }
+      if (replaced) statusSourceRuntime.removeSource(before.id);
+    }
+
+    config.statusSources.splice(0, config.statusSources.length, ...candidate.statusSources);
+    config.channels.splice(0, config.channels.length, ...candidate.channels);
+
+    for (const source of afterTargets) {
+      const before = beforeById.get(source.id);
+      const replaced = sourceTargetChanged(before, source);
+      let registration;
+      if (!before || replaced) {
+        registration = statusSourceRuntime.addSource(source);
+      } else {
+        registration = statusSourceRuntime.updateDefinition(source);
+      }
+      const channel = config.channels.find(item => item.id === source.broadcasterId);
+      const enabled = !channel || channel.enabled !== false;
+      if (!enabled) {
+        const scheduler = schedulers.get(source.id);
+        if (scheduler) await scheduler.stop().catch(() => {});
+        continue;
+      }
+      const existingScheduler = schedulers.get(source.id);
+      if (existingScheduler && !replaced) {
+        existingScheduler.setPollIntervalMs(source.pollIntervalMs);
+        if (isStarted()) existingScheduler.start();
+      } else if (!existingScheduler) {
+        const nextScheduler = createScheduler(registration);
+        schedulers.set(source.id, nextScheduler);
+        if (isStarted()) nextScheduler.start();
+      }
+    }
+    syncPublicChannels();
+    return targetList();
+  }
+
+  function sourceForChannel(channelId) {
+    const source = config.statusSources.find(item => item.kind === 'douyin-page' && item.broadcasterId === channelId);
+    const channel = config.channels.find(item => item.id === channelId);
+    if (!source || !channel) fail('MONITOR_NOT_FOUND', 'Monitor account was not found.', 404);
+    return { source, channel };
+  }
+
+  function ensureUniqueIdentity(identity, exceptChannelId) {
+    const duplicate = config.statusSources.find(source => source.kind === 'douyin-page'
+      && source.expectedIdentity === identity && source.broadcasterId !== exceptChannelId);
+    if (duplicate) fail('DUPLICATE_DOUYIN_ACCOUNT', 'This Douyin profile is already being monitored.', 409);
+  }
+
+  function requireWritable() {
+    if (config.readOnly === true) fail('READ_ONLY', 'Monitor management is read-only.', 403);
+  }
+
+  return Object.freeze({
+    list() { return targetList(); },
+    create(payload) {
+      return serialized(async () => {
+        requireWritable();
+        const body = ensureObject(payload);
+        const displayName = parseName(body.displayName);
+        const description = parseDescription(body.description);
+        const enabled = parseEnabled(body.enabled, true);
+        const intervalMinutes = parseIntervalMinutes(body.pollIntervalMinutes, 5);
+        const profile = parseDouyinUrl(body.url);
+        ensureUniqueIdentity(profile.expectedIdentity, null);
+        const channelId = uniqueId('douyin-anchor-', config.channels.map(item => item.id));
+        const sourceId = uniqueId('douyin-page-', config.statusSources.map(item => item.id));
+        const sort = config.channels.length ? Math.max(...config.channels.map(channel => channel.sort)) + 10 : 10;
+        const channel = { id: channelId, displayName, platform: 'Douyin', description, enabled, sort, staleAfterMs: 900_000 };
+        const source = {
+          kind: 'douyin-page', id: sourceId, broadcasterId: channelId,
+          url: profile.url, expectedIdentity: profile.expectedIdentity,
+          timeoutMs: 30_000, pollIntervalMs: intervalMinutes * 60_000, confirmationIntervalMs: 10_000,
+        };
+        const candidate = normalizeCandidate([...config.statusSources, source], [...config.channels, channel]);
+        await applyCandidate(candidate);
+        return targetList().find(item => item.channelId === channelId);
+      });
+    },
+    update(channelId, payload) {
+      return serialized(async () => {
+        requireWritable();
+        const body = ensureObject(payload);
+        const current = sourceForChannel(channelId);
+        const displayName = body.displayName === undefined ? current.channel.displayName : parseName(body.displayName);
+        const description = body.description === undefined ? current.channel.description : parseDescription(body.description);
+        const enabled = parseEnabled(body.enabled, current.channel.enabled);
+        const intervalMinutes = parseIntervalMinutes(body.pollIntervalMinutes, Math.round(current.source.pollIntervalMs / 60_000));
+        const profile = body.url === undefined
+          ? { url: current.source.url, expectedIdentity: current.source.expectedIdentity }
+          : parseDouyinUrl(body.url);
+        ensureUniqueIdentity(profile.expectedIdentity, channelId);
+        const nextChannel = { ...current.channel, displayName, description, enabled };
+        const nextSource = { ...current.source, url: profile.url, expectedIdentity: profile.expectedIdentity, pollIntervalMs: intervalMinutes * 60_000 };
+        const nextChannels = config.channels.map(channel => channel.id === channelId ? nextChannel : channel);
+        const nextSources = config.statusSources.map(source => source.id === current.source.id ? nextSource : source);
+        const candidate = normalizeCandidate(nextSources, nextChannels);
+        await applyCandidate(candidate);
+        return targetList().find(item => item.channelId === channelId);
+      });
+    },
+    remove(channelId) {
+      return serialized(async () => {
+        requireWritable();
+        const current = sourceForChannel(channelId);
+        const candidate = normalizeCandidate(
+          config.statusSources.filter(source => source.id !== current.source.id),
+          config.channels.filter(channel => channel.id !== channelId),
+        );
+        await applyCandidate(candidate);
+        return { removed: true, channelId };
+      });
+    },
+  });
 }
 
 function loadRuntimeConfig(filename) {

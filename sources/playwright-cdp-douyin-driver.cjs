@@ -439,7 +439,7 @@ async function safeDefaultPageInspector(input) {
           roomId: activeRoomId || profileRoomId,
         };
       }
-      if (liveStatus === 0 && hasRoomData && !roomDataLive && !activeRoomId) {
+      if (liveStatus === 0 && !roomDataLive && !activeRoomId && !profileRoomId) {
         return {
           httpStatus: response.status,
           verificationRequired: false,

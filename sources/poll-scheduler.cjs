@@ -7,7 +7,7 @@ function createPollScheduler(options = {}) {
   const broadcasterId = nonEmptyString(options.broadcasterId, 'broadcasterId');
   const statusSource = requireStatusSource(options.statusSource);
   const onObservation = requireFunction(options.onObservation, 'onObservation');
-  const pollIntervalMs = timerInteger(options.pollIntervalMs ?? 120_000, 'pollIntervalMs');
+  let pollIntervalMs = timerInteger(options.pollIntervalMs ?? 120_000, 'pollIntervalMs');
   const confirmationIntervalMs = timerInteger(
     options.confirmationIntervalMs ?? 10_000,
     'confirmationIntervalMs',
@@ -99,6 +99,19 @@ function createPollScheduler(options = {}) {
     return inFlight;
   }
 
+  function setPollIntervalMs(value) {
+    const nextInterval = timerInteger(value, 'pollIntervalMs');
+    if (nextInterval === pollIntervalMs) return;
+    pollIntervalMs = nextInterval;
+    if (intervalHandle !== undefined) {
+      clearIntervalFn(intervalHandle);
+      intervalHandle = setIntervalFn(() => {
+        pollNow().catch(onError);
+      }, pollIntervalMs);
+      intervalHandle?.unref?.();
+    }
+  }
+
   function start() {
     if (intervalHandle !== undefined) {
       return inFlight ?? Promise.resolve({ status: 'running', submitted: false });
@@ -121,7 +134,7 @@ function createPollScheduler(options = {}) {
     if (active) await active;
   }
 
-  return Object.freeze({ start, stop, pollNow });
+  return Object.freeze({ start, stop, pollNow, setPollIntervalMs });
 }
 
 async function safeRead(statusSource) {

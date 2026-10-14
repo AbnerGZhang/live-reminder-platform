@@ -410,7 +410,7 @@ function validateHandlerOptions(staticDir, config, loadDashboard) {
   if (typeof loadDashboard !== 'function') throw new Error('loadDashboard is required');
 }
 
-function createAdminRequestHandler({ staticDir, config, loadDashboard } = {}) {
+function createAdminRequestHandler({ staticDir, config, loadDashboard, monitorManager } = {}) {
   validateHandlerOptions(staticDir, config, loadDashboard);
   const sessions = new Map();
   const failures = new Map();
@@ -523,6 +523,60 @@ function createAdminRequestHandler({ staticDir, config, loadDashboard } = {}) {
     }
   }
 
+  async function monitorManagement(request, response, pathname) {
+    if (!activeSession(request)) return sendJson(response, 401, { ok: false, error: 'AUTHENTICATION_REQUIRED' });
+    if (!monitorManager) return sendJson(response, 503, { ok: false, error: 'MONITOR_MANAGEMENT_UNAVAILABLE' });
+    const base = '/api/admin-monitors';
+    const collection = pathname === base;
+    let channelId = null;
+    if (!collection) {
+      const encodedId = pathname.slice(base.length + 1);
+      if (!encodedId || encodedId.includes('/')) return sendJson(response, 400, { ok: false, error: 'INVALID_MONITOR_ID' });
+      try { channelId = decodeURIComponent(encodedId); } catch { return sendJson(response, 400, { ok: false, error: 'INVALID_MONITOR_ID' }); }
+    }
+
+    if (collection && request.method === 'GET') {
+      try { return sendJson(response, 200, { ok: true, data: await monitorManager.list() }); }
+      catch { return sendJson(response, 500, { ok: false, error: 'MONITOR_LIST_FAILED' }); }
+    }
+    if ((collection && request.method === 'POST') || (!collection && ['PATCH', 'PUT'].includes(request.method))) {
+      if (!String(request.headers['content-type'] || '').toLowerCase().startsWith('application/json')) {
+        return sendJson(response, 415, { ok: false, error: 'JSON_REQUIRED' });
+      }
+      let body;
+      try { body = await readJsonBody(request); }
+      catch (error) {
+        const tooLarge = error && error.code === 'TOO_LARGE';
+        return sendJson(response, tooLarge ? 413 : 400, { ok: false, error: tooLarge ? 'REQUEST_TOO_LARGE' : 'INVALID_JSON' });
+      }
+      try {
+        const data = collection ? await monitorManager.create(body) : await monitorManager.update(channelId, body);
+        return sendJson(response, collection ? 201 : 200, { ok: true, data });
+      } catch (error) {
+        const statusCode = Number.isInteger(error && error.statusCode) ? error.statusCode : 400;
+        return sendJson(response, statusCode, {
+          ok: false,
+          error: String(error && error.code || 'MONITOR_OPERATION_FAILED').slice(0, 100),
+          message: String(error && error.message || 'Monitor operation failed.').slice(0, 300),
+        });
+      }
+    }
+    if (!collection && request.method === 'DELETE') {
+      try { return sendJson(response, 200, { ok: true, data: await monitorManager.remove(channelId) }); }
+      catch (error) {
+        const statusCode = Number.isInteger(error && error.statusCode) ? error.statusCode : 400;
+        return sendJson(response, statusCode, {
+          ok: false,
+          error: String(error && error.code || 'MONITOR_OPERATION_FAILED').slice(0, 100),
+          message: String(error && error.message || 'Monitor operation failed.').slice(0, 300),
+        });
+      }
+    }
+    return sendJson(response, 405, { ok: false, error: 'METHOD_NOT_ALLOWED' }, {
+      allow: collection ? 'GET, POST' : 'PATCH, PUT, DELETE',
+    });
+  }
+
   function logout(request, response) {
     if (request.method !== 'POST') return sendJson(response, 405, { ok: false, error: 'METHOD_NOT_ALLOWED' }, { allow: 'POST' });
     const verified = verifySession(cookieToken(request), config.sessionSecret, now);
@@ -543,6 +597,11 @@ function createAdminRequestHandler({ staticDir, config, loadDashboard } = {}) {
     }
     if (pathname === '/api/admin-dashboard') {
       Promise.resolve(dashboard(request, response)).catch(() => sendJson(response, 500, { ok: false, error: 'INTERNAL_ERROR' }));
+      return;
+    }
+    if (pathname === '/api/admin-monitors' || pathname.startsWith('/api/admin-monitors/')) {
+      Promise.resolve(monitorManagement(request, response, pathname))
+        .catch(() => sendJson(response, 500, { ok: false, error: 'INTERNAL_ERROR' }));
       return;
     }
     if (pathname === '/api/admin-logout') return logout(request, response);

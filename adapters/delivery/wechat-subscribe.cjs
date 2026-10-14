@@ -7,6 +7,7 @@ const TOKEN_REFRESH_MARGIN_MS = 60_000;
 const INVALID_TOKEN_CODES = new Set([40001, 40014, 42001]);
 const TEMPLATE_SOURCES = new Set([
   'broadcasterId',
+  'broadcasterName',
   'eventId',
   'occurredAt',
   'source',
@@ -17,6 +18,7 @@ function createWechatSubscribeDelivery({
   appSecret,
   template,
   resolveOpenId,
+  resolveBroadcasterName = broadcasterId => broadcasterId,
   fetchImpl = globalThis.fetch,
   timeoutMs = 5_000,
   clock = Date,
@@ -64,7 +66,13 @@ function createWechatSubscribeDelivery({
       };
     }
 
-    const body = buildMessageBody(messageTemplate, envelope, openId);
+    const broadcasterName = resolveBroadcasterName(envelope.broadcasterId);
+    const body = buildMessageBody(messageTemplate, {
+      ...envelope,
+      broadcasterName: typeof broadcasterName === 'string' && broadcasterName.trim()
+        ? broadcasterName.trim()
+        : envelope.broadcasterId,
+    }, openId);
     let providerResult = await sendMessage(
       accessToken,
       body,

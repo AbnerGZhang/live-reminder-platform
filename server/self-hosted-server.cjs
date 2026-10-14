@@ -360,6 +360,7 @@ function createSelfHostedServer({
   coreFactory,
   config,
   clientRequestHandler,
+  monitorManager,
   observationCommandFactory = defaultObservationCommandFactory
 } = {}) {
   validateSelfHostedConfig(config)
@@ -378,7 +379,8 @@ function createSelfHostedServer({
     loadDashboard: async () => {
       const dashboard = await resolvedCore.read({ kind: "dashboard" })
       return { ok: true, data: projectAdminDashboard(dashboard) }
-    }
+    },
+    monitorManager,
   })
 
   async function handleObservation(request, response) {
