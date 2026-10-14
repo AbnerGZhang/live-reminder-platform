@@ -1,68 +1,81 @@
-# Live Reminder Platform / 直播提醒平台ZHANG
+# 开播雷达｜KaiBo Radar
 
-A starter kit for one operator to run live-status monitoring and WeChat reminders for their users.
+一个面向直播电商运营场景的自托管工具，用于集中管理需要关注的主播、查看直播状态，并在完成相应配置与用户授权后，尝试发送微信订阅提醒。
 
-一位运营者部署一次直播状态监控和微信提醒服务，普通用户直接使用其小程序，不需要自己购买服务器。
+开播雷达适合先在本地环境验证，再按实际需求部署到自己的服务器。项目不是抖音、微信或其他平台的官方产品。
 
-[Download v1.2.1 / 下载 v1.2.1](https://github.com/drfellingood/live-reminder-platform-public/releases/tag/v1.2.1)
+## 主要功能
 
-> [!IMPORTANT]
-> This is source code and a reusable template, not a ready-made online service. / 这是源码模板，不是下载后立即可用的在线服务。
+- **主播账号管理**：在管理后台维护监测对象，可新增、编辑、启用、停用或删除账号。
+- **直播状态监测**：定期检查已配置的状态源，并展示开播中、未开播或状态未知等结果。
+- **状态变化处理**：根据监测结果处理状态变化；当页面信息不足、验证未完成或状态源不可用时，不应将不确定结果直接视为未开播。
+- **微信订阅提醒**：在小程序、订阅模板、服务端参数及用户授权均配置妥当后，按项目逻辑发送订阅消息。
+- **管理后台**：集中查看监测账号及其当前状态，并维护监测配置。
+- **演示模式**：可用演示服务熟悉基本界面和流程；演示模式使用模拟数据，不发送真实微信通知。
 
-## Ask AI to help / 让 AI 帮你配置
+> 监测结果会受到平台页面变化、网络状况、浏览器登录状态、验证与访问限制等因素影响。服务端发出消息请求，不代表微信一定接受，也不代表通知一定展示在用户设备上。
 
-Replace the target link, then send the whole block to any AI assistant. / 替换目标链接，再把整段发给任意 AI 助手。
+## 技术与运行环境
 
-<details>
-<summary><strong>Need help? Copy this prompt / 不会配置？点击复制提示词</strong></summary>
+- Node.js 22.13 或更高版本
+- npm 10 或更高版本
+- 使用内置抖音页面检测器时，需要由运营者控制、已登录且可通过 CDP 访问的 Chrome/Chromium 浏览器
+- 使用微信订阅提醒时，需要配置自己有权使用的小程序、可用的订阅消息模板及相关服务端信息
 
-```text
-Please guide me through this project step by step. 请一步一步帮我配置这个项目。
+## 快速启动演示
 
-Repository / 项目地址：
-https://github.com/drfellingood/live-reminder-platform-public
-
-Target page / 我想监控的公开页面：
-[PASTE THE PUBLIC PAGE URL HERE / 在这里粘贴链接]
-
-First confirm that you can read the repository. If not, ask me to upload the public source ZIP or needed public guide; do not guess. Ask whether I want the demo or real deployment, and which operating system I use. Give me one step at a time.
-先确认你能读取仓库；如果不能，让我上传公开源码 ZIP 或所需说明，不要猜测。询问我是体验演示还是真实部署，以及使用什么系统。每次只给我一个步骤。
-
-For real use, help me configure my own Mini Program, HTTPS server, notification template, and one authorized status source. If my target is a canonical Douyin profile, check whether the included visible-browser adapter is suitable; do not claim that every share or livestream URL works. Never request secrets or real user data, bypass verification, or publish/deploy without my approval.
-正式使用时，帮我配置自己的小程序、HTTPS 服务器、通知模板和一个合法获授权的状态源。如果目标是规范的抖音用户主页，先判断内置的可视浏览器适配器是否适合；不要声称任意分享链接或直播链接都能使用。不要索取密钥或真实用户数据，不要绕过安全验证，未经我确认不要上传或部署。
-```
-
-</details>
-
-## Quick demo / 快速体验
-
-Uses fictional data and sends no real notifications. Install [Node.js 22.13+](https://nodejs.org/en/download), download the source, then run: / 使用虚构数据且不发送通知；安装 Node.js 并下载源码后运行：
+在项目根目录执行：
 
 ```powershell
-npm ci
-npm run demo
+npm.cmd ci
+npm.cmd run demo
 ```
 
-Open the local address and use the temporary password shown in the terminal. / 打开终端显示的本机地址并使用临时密码；Windows 如阻止 `npm`，可改用 `npm.cmd`。
+然后根据终端输出打开本地演示地址，并按提示登录。演示服务不发送真实通知。
 
-## Real use needs / 正式使用需要
+在 Windows PowerShell 中，如果直接执行 `npm` 遇到 `npm.ps1` 执行策略错误，可以使用 `npm.cmd`，无需因此修改全局执行策略。
 
-1. Your own WeChat Mini Program and subscription-message template / 自己的小程序和订阅消息模板
-2. One HTTPS server and accepted domain / 一台带 HTTPS 域名的服务器
-3. One authorized status source: the optional visible-browser adapter for a canonical Douyin profile, or your own status API / 一个获授权的状态源：可选的抖音规范主页可视浏览器适配器，或你自己的状态接口
+## 本地运行服务
 
-A normal page is not automatically a reliable status source. The included page adapter accepts only canonical `https://www.douyin.com/user/...` profiles, needs an operator-controlled signed-in visible Chromium browser, and returns `unknown` on verification, rate limits, identity mismatch, or incomplete evidence.
+首次运行前，请先阅读配置和部署文档，并确认已准备好所需的状态源和私密配置。
 
-普通页面不能自动当作可靠状态源。内置页面适配器只接受规范的 `https://www.douyin.com/user/...` 用户主页，需要运营者自己的已登录可视 Chromium；遇到验证、限流、身份不符或证据不完整时只返回 `unknown`。
+```powershell
+npm.cmd ci
+npm.cmd start
+```
 
-## Setup guides / 配置说明
+默认本地服务地址为 `http://127.0.0.1:8787`，管理后台通常位于 `http://127.0.0.1:8787/admin`。若本地配置使用了其他端口，请以实际设置为准。
 
-[Page detector / 页面检测器](docs/DOUYIN_PAGE_DETECTOR.md) · [Mini Program / 小程序](docs/WECHAT_MINIPROGRAM.md) · [Configuration / 配置](docs/CONFIGURATION.md) · [Deployment & backups / 部署备份](docs/DEPLOYMENT.md) · [Security / 安全](SECURITY.md)
+## 配置前检查
 
-## Before real use / 正式使用前
+1. **填写本地环境变量**：按需配置 `.env`。不要把 AppSecret、身份校验密钥、管理凭据、Cookie 或真实用户数据提交到公共仓库。
+2. **设置监测账号**：在后台添加经过授权、符合当前检测器要求的主播主页，并核对账号身份。
+3. **配置浏览器状态源**：若使用抖音页面检测器，启动已登录的 Chrome/Chromium，并按照配置文档设置 CDP 地址。
+4. **配置微信订阅消息**：使用自己有权使用的小程序与获准的模板，核对模板字段、字段类型及业务用途是否符合平台要求。
+5. **进行端到端测试**：分别验证开播、未开播、状态未知、用户授权、消息请求失败以及服务重启后的行为。
+6. **部署前做好运维准备**：为正式服务配置 HTTPS、进程守护、日志管理、备份与恢复方案，并评估平台规则及隐私义务。
 
-Users must approve reminders; sender `accepted` does not prove phone display. Test the real template, backups, security, and phone delivery before launch. / 用户需主动授权；接口接受不代表手机弹出，正式开放前请完成真实测试。
+## 相关文档
 
-## License / 许可证
+- [项目配置说明](docs/CONFIGURATION.md)
+- [抖音页面检测器说明](docs/DOUYIN_PAGE_DETECTOR.md)
+- [微信小程序接入说明](docs/WECHAT_MINIPROGRAM.md)
+- [部署与备份说明](docs/DEPLOYMENT.md)
+- [安全策略](SECURITY.md)
+- [第三方依赖及声明](THIRD_PARTY_NOTICES.md)
 
-`AGPL-3.0-only`; dependencies retain their licenses. See [third-party notices / 第三方声明](THIRD_PARTY_NOTICES.md).
+## 安全与使用边界
+
+- 仅使用自己有权监测的公开账号或获授权的状态源。
+- 不要将 `.env`、密钥、登录凭据、Cookie 或真实用户信息上传至公共仓库。
+- 不尝试绕过平台验证、访问控制或限流措施；出现验证、限流或证据不足时，应先排查状态源并稍后重试。
+- 用户必须按平台要求自行授权订阅消息。服务端处理成功不代表通知必然展示。
+- 对外提供服务前，应检查适用的平台规则、隐私与数据保留要求，并做好访问控制和服务器安全防护。
+
+## 许可证与第三方声明
+
+请以仓库中的 `LICENSE`、`THIRD_PARTY_NOTICES.md` 及各依赖项随附的许可证和版权声明为准。对代码进行修改、再分发或提供网络服务时，应确认并履行适用许可证所规定的义务；不得因更改项目名称或说明文档而移除必要的版权与许可声明。
+
+## 项目说明
+
+**开播雷达（KaiBo Radar）** 是一个独立的运营辅助工具。各平台页面结构、接口、验证机制和相关政策可能发生变化，使用者需要以平台现行规则及自己的实际测试结果为准。本项目不承诺所有账号、页面或网络环境均可稳定监测，也不构成任何平台的官方背书。
